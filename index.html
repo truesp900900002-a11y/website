@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #05020a;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'Tahoma', sans-serif;
+            user-select: none;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .hint-text {
+            position: absolute;
+            bottom: 30px;
+            color: #ff99bb;
+            font-size: 16px;
+            z-index: 10;
+            letter-spacing: 1px;
+            opacity: 0.8;
+            pointer-events: none;
+            animation: pulseText 2s infinite ease-in-out;
+        }
+        @keyframes pulseText {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+    <div class="hint-text">(กดตรงไหนก็ได้นะ)</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+        let fireFlames = [];
+        let state = 'burning'; // 'burning' -> 'blooming'
+        let burnProgress = 0;
+        let roseScale = 0;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // เอฟเฟกต์ไฟและละอองดาว
+        class FireSpark {
+            constructor(x, y, isSpark = false) {
+                this.x = x;
+                this.y = y;
+                this.size = isSpark ? Math.random() * 4 + 2 : Math.random() * 12 + 6;
+                this.vx = (Math.random() - 0.5) * (isSpark ? 6 : 3);
+                this.vy = isSpark ? (Math.random() - 0.7) * 7 : -Math.random() * 4 - 2;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.03 + 0.01;
+                this.color = isSpark 
+                    ? `hsl(${Math.random() * 40 + 10}, 100%, 65%)`
+                    : `hsl(${Math.random() * 30 + 340}, 100%, 60%)`;
+                this.isSpark = isSpark;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+                if (!this.isSpark) this.size *= 0.96;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                if (this.isSpark) {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.font = `${this.size + 8}px sans-serif`;
+                    ctx.fillText('💖', this.x, this.y);
+                }
+                ctx.restore();
+            }
+        }
+
+        function createBurst(x, y) {
+            for (let i = 0; i < 20; i++) {
+                particles.push(new FireSpark(x, y, true));
+            }
+            for (let i = 0; i < 6; i++) {
+                particles.push(new FireSpark(x, y, false));
+            }
+        }
+
+        function triggerOpen() {
+            if (state === 'burning') {
+                state = 'blooming';
+                createBurst(width / 2, height / 2);
+            }
+        }
+
+        window.addEventListener('click', (e) => {
+            triggerOpen();
+            createBurst(e.clientX, e.clientY);
+        });
+        window.addEventListener('touchstart', (e) => {
+            triggerOpen();
+            if (e.touches.length > 0) {
+                createBurst(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        });
+
+        // วาดดอกกุหลาบ
+        function drawRose(cx, cy, scale) {
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // ก้านและใบ
+            ctx.strokeStyle = '#2d8a4e';
+            ctx.lineWidth = 6 * scale;
+            ctx.beginPath();
+            ctx.moveTo(0, 40 * scale);
+            ctx.quadraticCurveTo(20 * scale, 120 * scale, 0, 200 * scale);
+            ctx.stroke();
+
+            // ใบไม้
+            ctx.fillStyle = '#236b3c';
+            ctx.beginPath();
+            ctx.ellipse(25 * scale, 110 * scale, 30 * scale, 12 * scale, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(-25 * scale, 140 * scale, 28 * scale, 10 * scale, -Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // กลีบดอกกุหลาบ (ซ้อนชั้น)
+            const petalColors = ['#80001a', '#b30026', '#e60033', '#ff1a4d', '#ff4d73'];
+            for (let i = 5; i > 0; i--) {
+                const r = i * 22 * scale;
+                ctx.fillStyle = petalColors[i - 1];
+                ctx.shadowColor = '#ff0037';
+                ctx.shadowBlur = 20 * scale;
+
+                ctx.beginPath();
+                for (let a = 0; a < Math.PI * 2; a += 0.1) {
+                    const radius = r + Math.sin(a * 4 + i) * (8 * scale);
+                    const x = Math.cos(a) * radius;
+                    const y = Math.sin(a) * radius;
+                    if (a === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // ข้อความตรงกลาง
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const fontSize = Math.max(22, 28 * scale);
+            ctx.font = `bold ${fontSize}px Tahoma, sans-serif`;
+            ctx.fillText('คนสวย 💖', 0, -5 * scale);
+
+            ctx.restore();
+        }
+
+        // วาดซองจดหมายและเปลวไฟ
+        function drawEnvelope(cx, cy, burn) {
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            const w = 240;
+            const h = 160;
+
+            if (burn < 1) {
+                // ตัวซองจดหมาย
+                ctx.fillStyle = '#f4e4bc';
+                ctx.shadowColor = '#ff6600';
+                ctx.shadowBlur = 25;
+                ctx.fillRect(-w / 2, -h / 2, w, h * (1 - burn * 0.7));
+
+                // ฝาปิดซอง
+                ctx.fillStyle = '#e2cf9f';
+                ctx.beginPath();
+                ctx.moveTo(-w / 2, -h / 2);
+                ctx.lineTo(0, 0);
+                ctx.lineTo(w / 2, -h / 2);
+                ctx.fill();
+
+                // ตราประทับหัวใจ
+                ctx.fillStyle = '#cc0029';
+                ctx.font = '32px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('💌', 0, -10);
+            }
+
+            ctx.restore();
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(5, 2, 10, 0.25)';
+            ctx.fillRect(0, 0, width, height);
+
+            const cx = width / 2;
+            const cy = height / 2;
+
+            if (state === 'burning') {
+                burnProgress += 0.003;
+                if (burnProgress >= 0.8) {
+                    state = 'blooming';
+                    createBurst(cx, cy);
+                }
+
+                // สุ่มสร้างเปลวไฟลุกลาม
+                if (Math.random() < 0.6) {
+                    fireFlames.push(new FireSpark(cx + (Math.random() - 0.5) * 220, cy + 40, true));
+                }
+
+                drawEnvelope(cx, cy, burnProgress);
+            } else if (state === 'blooming') {
+                if (roseScale < 1) roseScale += (1 - roseScale) * 0.05;
+                drawRose(cx, cy - 30, roseScale);
+            }
+
+            // อัปเดตและวาดอนุภาคไฟ/หัวใจ
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = fireFlames.length - 1; i >= 0; i--) {
+                fireFlames[i].update();
+                fireFlames[i].draw();
+                if (fireFlames[i].alpha <= 0) fireFlames.splice(i, 1);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
